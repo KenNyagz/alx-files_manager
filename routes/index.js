@@ -1,9 +1,9 @@
 import express from 'express';
-import AppController'../controllers/AppController';
+import AppController from '../controllers/AppController';
 
 const router = express.Router();
 
 router.get('/status', AppController.getStatus);
-router.get('/status', Appcontroller.getStats);
+router.get('/status', AppController.getStats);
 
 export default router;
