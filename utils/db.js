@@ -10,10 +10,6 @@ class DBClient {
 
     this.client = new MongoClient(url, { userNewUrlParser: true, userUnifiedTopology: true });
     this.dbName = database;
-    this.client.connect()
-      .then(() => {
-        this.is
-      });
   }
 
   async isAlive() {
