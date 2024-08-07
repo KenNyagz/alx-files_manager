@@ -8,11 +8,13 @@ import FilesController from '../controllers/FilesController';
 const router = express.Router();
 
 router.get('/status', AppController.getStatus);
-router.get('/status', AppController.getStats);
+router.get('/stat', AppController.getStats);
+router.post('/users', UsersController.postNew);
 router.get('/connect', AuthController.getConnect);
 router.get('/disconnect', AuthController.getDisconnect);
 router.get('/users/me', UserController.getMe);
-router.post('/users', UsersController.postNew);
+router.get('/files', FilesController.getIndex);
+router.get('/files/:d', FilesController.getShow);
 router.post('/files', FilesController.postUpload);
 
 export default router;
