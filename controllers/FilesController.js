@@ -212,6 +212,72 @@ class FilesController {
     return res.status(200).json(updatedFile);
 
   }
+
+
+  static async getFile(req, res) {
+    const authHeader = req.headers.authorization;
+    const { id } = req.params;
+
+    const db = dbClient.client.db(dbClient.dbName);
+    const filesCollection = db.collection('files');
+
+    if (authHeader || authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const tokenKey = `auth_${token}`;
+      const userId = await redisClient.get(tokenKey);
+
+      if (!userId) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      const file = await filesCollection.findOne({ _id: dbClient.client.ObjectId(id) });
+
+      if (!file) {
+        return res.status(404).json({ error: 'Not Found' });
+      }
+
+      // Check file ownership or visibility
+      if(!file.isPublic && file.userId !== userId) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Handle folder type
+      if (file.type === 'folder') {
+        return res.status(400).json({ error: "A folder doesn't have content" });
+      }
+
+      // File handling
+      if (!file.localPath || !fs.existsSync(file.localPath)) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      // Set the MIME type and return file content
+      const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+      res.setHeader('Content-Type', mimeType);
+      const fileStream = fs.createReadStream(file.localPath);
+      fileStream.pipe(res);
+
+    } else {
+      // if no Authorization header, handle as if file is public
+      const file = await fileCollection.findOne({ _id: dbClient.client.ObjectId(id) });
+
+      if (!file || !file.isPublic) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+
+      if (file.type === 'folder') {
+        return res.status(400).json({ error: "A folder doesn't have content" });
+      }
+
+      if (!file.localPath || !fs.existsSync(file.localPath)) {
+        return res.status(404).json({ error : 'Not found' });
+      }
+
+      const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+      res.setHeader('Content-Type', mimeType);
+      const fileStream = fs.createReadStream(file.localPath);
+      fileStream.pipe(res);
+    }
+  }
 }
 
 export default FilesController;
