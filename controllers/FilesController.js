@@ -2,12 +2,16 @@ import fs from 'fs';
 import path from 'path';
 import { uuidv4 } from 'uuid';
 import mime from 'mime-types';
+import imageThumbnail from 'image-thumbnail';
+import Bull from 'bull';
 import redis from '../utils/redis';
 import dbClient from '../utils/db';
 
+const sizes = [500 ,250, 100];
+
 class FilesController {
   static async postUpload(req, res) {
-    const authHeader = req.headers.authorization;
+    /*const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -21,7 +25,7 @@ class FilesController {
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
-    }
+    }*/
 
     const { name, type, parentId = 0, isPublic = false, data } = req.body;
 
@@ -38,11 +42,11 @@ class FilesController {
       return res.status(400).json({ error: "Missing data" });
     }
 
-    const db = dbClient.client.db(dbClient.dbName);
-    const filesCollection = db.collection('files');
+    /*const db = dbClient.client.db(dbClient.dbName);
+    const filesCollection = db.collection('files');*/
 
     // Validate parentID
-    if (parentId !== 0) {
+    /*if (parentId !== 0) {
       const parentFile = await filesCollection.findOne({ _id: dbClient.client.ObjectId(parentId) });
 
       if (!parentFile) {
@@ -60,10 +64,33 @@ class FilesController {
       type,
       isPublic,
       parentId: parentId === 0 ? 0 : dbClient.client.ObjectId(parentId),
-    };
+    };*/
 
-    // if type is a folder, add to DB
-    if (type === 'folder') {
+    const token = req.headers['x-token'];
+    const userId = await redisClient.get(`auth_${token}`);
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    let filePath = null;
+    if (type !== 'folder') {
+      const folderPath = process.env.FOLDER_PATH || '/tmp/files_manger';
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+      }
+
+      const fileUuid = uuidv4();
+      filePath = path.join(folderPath, fileUuid);
+
+      const decodedData = Buffer.from(data, 'base64');
+      await fs.promises.writeFile(filePath, decodedData);
+    }
+
+    const db = dbClient.client.db(dbClient.dbName);
+    const filesCollection = db.collection('files');
+
+    /*if (type === 'folder') {              // if type is a folder, add to DB
       const result = await filesCollection.insertOne(newFile);
       return res.status(201).json({ id: result.insertedId, ...newFile });
     }
@@ -86,7 +113,32 @@ class FilesController {
 
     // Add to DB
     const result = await filesCollection.insertOne(newFile);
-    return res.status(201).json({ id: result.insertedId, ...newFile });
+    return res.status(201).json({ id: result.insertedId, ...newFile });*/
+    const fileDocument = {
+      userId,
+      name,
+      type,
+      isPublic,
+      parentId,
+      localPath: filePath || null,
+    };
+
+    const result = await filesCollection.insertOne(fileDocument);
+    const fileId = result.insertedId.toString();
+
+    if (type === 'image') {
+      fileQueue.add({ userId, fileId });
+    }
+
+    res.status(201).json({
+      id: fileId,
+      userId,
+      name,
+      type,
+      isPublic,
+      parentId,
+      localPath: filePath || null,
+    });
   }
 
 
@@ -217,11 +269,40 @@ class FilesController {
   static async getFile(req, res) {
     const authHeader = req.headers.authorization;
     const { id } = req.params;
+    const { size } = req.query;
 
     const db = dbClient.client.db(dbClient.dbName);
     const filesCollection = db.collection('files');
 
-    if (authHeader || authHeader.startsWith('Bearer ')) {
+    const user = await authentication(req, res);
+    if (!user) return;
+
+    const file = await filesCollection.findOne({ _id: dbClient.client.ObjectId(id) });
+    if (!file) { return res.status(404).json({ error: 'Not found' });
+
+    if (!file.isPublic && file.userId !== user.id) {
+      return  res.status(404).json({ error: 'Not found' });
+    }
+
+    if (file.type === 'folder') {
+      return res.status(400).json({ error: "A folder doesn't have content" });
+    }
+
+    let filePath = file.localPath;
+    if (size & sizes.includes(Number(size))) {
+      filePath = `${filePath}_${size}`;
+    }
+
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+    res.setHeader('Content-Type', mimeType);
+    const fileStream = fs.createReadStream(file.localPath);
+    fileStream.pipe(res);
+
+    /*if (authHeader || authHeader.startsWith('Bearer ')) {
       const token = authHeader.split(' ')[1];
       const tokenKey = `auth_${token}`;
       const userId = await redisClient.get(tokenKey);
@@ -241,7 +322,7 @@ class FilesController {
       }
 
       // Handle folder type
-      if (file.type === 'folder') {
+      getFileData    if (file.type === 'folder') {
         return res.status(400).json({ error: "A folder doesn't have content" });
       }
 
@@ -276,7 +357,7 @@ class FilesController {
       res.setHeader('Content-Type', mimeType);
       const fileStream = fs.createReadStream(file.localPath);
       fileStream.pipe(res);
-    }
+    }*/
   }
 }
 
