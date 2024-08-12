@@ -149,10 +149,10 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const token = AuthHeader.split(' ')[1];
+    const token = authHeader.split(' ')[1];
     const tokenKey = `auth_${token}`;
 
-    const userId = await redisClient.get(tokeKey); //Get Id from redis
+    const userId = await redisClient.get(tokenKey); //Get Id from redis
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -174,7 +174,7 @@ class FilesController {
   static async getIndex(req, res) {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeaer.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -213,7 +213,7 @@ class FilesController {
 
     const token = authHeader.split(' ')[1];
     const tokenKey = `auth_${token}`;
-    const user_d = await redisClient.get(tokenKey);
+    const userId = await redisClient.get(tokenKey);
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -278,7 +278,7 @@ class FilesController {
     if (!user) return;
 
     const file = await filesCollection.findOne({ _id: dbClient.client.ObjectId(id) });
-    if (!file) { return res.status(404).json({ error: 'Not found' });
+    if (!file) { return res.status(404).json({ error: 'Not found' }); }
 
     if (!file.isPublic && file.userId !== user.id) {
       return  res.status(404).json({ error: 'Not found' });
@@ -289,7 +289,7 @@ class FilesController {
     }
 
     let filePath = file.localPath;
-    if (size & sizes.includes(Number(size))) {
+    if (size && sizes.includes(Number(size))) {
       filePath = `${filePath}_${size}`;
     }
 
